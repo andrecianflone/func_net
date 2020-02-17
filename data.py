@@ -42,7 +42,7 @@ def operator_targets(ops: List[Callable], data: np.ndarray):
 
     Each op should accept a 1-D np array.
     """
-    chunks = np.split(data, len(ops))
+    chunks = np.array_split(data, len(ops))
     new_x = [None]*len(ops)
     labels = [None]*len(ops)
 
@@ -88,18 +88,19 @@ def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
     loaders = []
     for inp in inputs:
         # Get targets and modified inputs
-        x, y = operator_targets(ops, x)
+        x_in, y = operator_targets(ops, inp)
 
         # Make PyTorch dataloaders
         params = {'batch_size': batch_size,
                   'shuffle': True,
                   'num_workers': 6}
 
-        x, y = torch.from_numpy(x), torch.from_numpy(y)
-        dataset = torch.utils.data.TensorDataset(x, y)
+        x_in, y = torch.from_numpy(x_in), torch.from_numpy(y)
+        dataset = torch.utils.data.TensorDataset(x_in, y)
         loader = torch.utils.data.DataLoader(dataset, **params)
+        loaders.append(loader)
 
-    return loader
+    return loaders
 
 if __name__ == '__main__':
 
