@@ -102,6 +102,19 @@ def make_op_dataset(low,high,samples, seq_len, batch_size,ops):
 
     return loaders
 
+def get_toy_data(batch_size):
+    dataset_settings = {
+            'batch_size': batch_size,
+            'samples' : 100,
+            'seq_len': 10,
+            'low' : 0,
+            'high' : 100,
+            'ops' : [np.max, np.min, np.mean, np.sum]
+            }
+
+    train_loader,valid_loader,test_loader = make_op_dataset(**dataset_settings)
+    return train_loader, valid_loader, test_loader, dataset_settings
+
 if __name__ == '__main__':
 
     # Test settings
