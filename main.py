@@ -1,6 +1,13 @@
 import argparse
 import os
 import math
+import data
+import torch
+from utils import utils
+from utils.progress import Progress
+import numpy as np
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def vq_vae_loss(args, x_prime, x, vq_loss, model):
     """
@@ -65,27 +72,23 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer, train_bpd
                                         ppl=float(perplexity), increment=100)
         args.global_it += 1
 
-
-
 def main(args):
     ###############################
     # TRAIN PREP
     ###############################
     print("Loading data")
-    train_loader, valid_loader, data_var, input_size = \
-                                data.get_data(args.data_folder,args.batch_size)
+    train_loader, valid_loader, test_loader, d_settings = \
+                                data.get_toy_data(args.batch_size)
 
-    args.input_size = input_size
+    args.input_size = d_settings["samples"]
     args.downsample = args.input_size[-1] // args.enc_height
-    args.data_variance = data_var
+    # args.data_variance = data_var
     print(f"Training set size {len(train_loader.dataset)}")
     print(f"Validation set size {len(valid_loader.dataset)}")
+    print(f"Test set size {len(test_loader.dataset)}")
 
     print("Loading model")
-    if args.model == 'diffvqvae':
-        model = DiffVQVAE(args).to(device)
-    elif args.model == 'vqvae':
-        model = VQVAE(args).to(device)
+    model = VQVAE(args).to(device)
     print(f'The model has {utils.count_parameters(model):,} trainable parameters')
 
     optimizer = optim.Adam(model.parameters(),lr=args.learning_rate,
@@ -96,9 +99,9 @@ def main(args):
     pbar = Progress(num_batches, bar_length=10, custom_increment=True)
 
     # Needed for bpd
-    args.KL = args.enc_height * args.enc_height * args.num_codebooks * \
-                                                    np.log(args.num_embeddings)
-    args.num_pixels  = np.prod(args.input_size)
+    # args.KL = args.enc_height * args.enc_height * args.num_codebooks * \
+                                                    # np.log(args.num_embeddings)
+    # args.num_pixels  = np.prod(args.input_size)
 
     ###############################
     # MAIN TRAIN LOOP
@@ -138,14 +141,13 @@ if __name__ == '__main__':
     # Data and training settings
     add('--data_folder', type=str, default=".data/cifar10",
             help='Location of data (will download data if does not exist)')
-    add('--dataset', type=str,
-            help='Dataset name')
     add('--batch_size', type=int, default=32)
     add('--max_iterations', type=int, default=None,
             help="Max it per epoch, for debugging (default: None)")
     add('--num_epochs', type=int, default=40,
             help='number of epochs (default: 40)')
     add('--learning_rate', type=float, default=3e-4)
+    add('--dataset', type=str, choices=['toy'], default='toy')
 
     # Quantization settings
     add('--num_codebooks', type=int, default=1,
