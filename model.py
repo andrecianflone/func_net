@@ -1,8 +1,11 @@
+import utils
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#TODO: Add encoder/decoder
 
 class Quantize(nn.Module):
     def __init__(self, dim, num_embeddings, decay=0.99, eps=1e-5):
@@ -71,8 +74,7 @@ class VQ(nn.Module):
         assert embed_dim % num_codebooks == 0, ("you need that last dimension"
                             " to be evenly divisible by the amt of codebooks")
 
-        self.enc = Encoder(in_channel, channel, num_residual_layers,
-                                    num_residual_hiddens, stride=downsample)
+        self.enc = SmallEnc(in_channel, channel, stride=downsample)
 
         self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)
         self.dec = Decoder(embed_dim, in_channel, channel, num_residual_layers,
@@ -139,4 +141,121 @@ class VQ(nn.Module):
 
     def decode(self, quant):
         return self.dec(quant)
+
+class ResBlock(nn.Module):
+    def __init__(self, in_channel, channel):
+        super().__init__()
+
+        self.conv = nn.Sequential(
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channel, channel, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channel, in_channel, 1),
+        )
+
+    def forward(self, x):
+        out = self.conv(x)
+        out += x
+
+        return out
+
+class SamllEnc(nn.Module):
+    """ Small conv encoder for toy data """
+    def __init__(self, in_channel, channel, stride):
+        super().__init__()
+
+        self.c1 = nn.Conv2d(in_channel, channel // 2, 2, stride=stride, padding=1)
+        self.c2 = nn.Conv2d(channel // 2, channel, 2, stride=stride, padding=1),
+
+    def forward(self, x):
+        r = F.relu(self.c1(x), inplace=True)
+        r = F.relu(self.c2(x), inplace=True)
+        return r
+
+class Encoder(nn.Module):
+    def __init__(self, in_channel, channel, num_residual_layers,
+            num_residual_hiddens, stride):
+        super().__init__()
+        if stride == 8:
+            blocks = [
+                nn.Conv2d(in_channel, channel // 2, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel // 2, channel, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel, channel, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel, channel, 3, padding=1),
+            ]
+
+        if stride == 4:
+            blocks = [
+                nn.Conv2d(in_channel, channel // 2, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel // 2, channel, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel, channel, 3, padding=1),
+            ]
+
+        elif stride == 2:
+            blocks = [
+                nn.Conv2d(in_channel, channel // 2, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel // 2, channel, 3, padding=1),
+            ]
+
+        elif stride == 1:
+            blocks = [
+                nn.Conv2d(in_channel, channel // 2, 5, padding=2),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(channel // 2, channel // 2, 3, padding=1)
+            ]
+
+        for i in range(num_residual_layers):
+            blocks += [ResBlock(channel, num_residual_hiddens)]
+
+        blocks += [nn.ReLU(inplace=True)]
+
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, x):
+        return self.blocks(x)
+
+
+class Decoder(nn.Module):
+    def __init__(self, in_channel, out_channel, channel, num_residual_layers, num_residual_hiddens, stride):
+        super().__init__()
+
+        blocks = [nn.Conv2d(in_channel, channel, 3, padding=1)]
+
+        for i in range(num_residual_layers):
+            blocks += [ResBlock(channel, num_residual_hiddens)]
+
+        blocks += [nn.ReLU(inplace=True)]
+
+        if stride == 8:
+            blocks += [
+                nn.ConvTranspose2d(channel, channel, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(channel, channel // 2, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(channel // 2, out_channel, 4, stride=2, padding=1),
+            ]
+
+        if stride == 4:
+            blocks += [
+                nn.ConvTranspose2d(channel, channel // 2, 4, stride=2, padding=1),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose2d(channel // 2, out_channel, 4, stride=2, padding=1),
+            ]
+
+        elif stride == 2:
+            blocks += [nn.ConvTranspose2d(channel, out_channel, 4, stride=2, padding=1)]
+
+        elif stride == 1:
+            blocks += [nn.Conv2d(channel, out_channel, 3, padding=1)]
+
+        self.blocks = nn.Sequential(*blocks)
+
+    def forward(self, x):
+        return self.blocks(x)
 
