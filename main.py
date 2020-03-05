@@ -4,8 +4,10 @@ import math
 import data
 import torch
 from utils import utils
+
 from utils.progress import Progress
 import numpy as np
+from model import VQ
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -18,6 +20,8 @@ def vq_vae_loss(args, x_prime, x, vq_loss, model):
     """
     # Use Discretized Logistic as an alternative to MSE, see [1]
     log_pxz = utils.discretized_logistic(x_prime, model.dec_log_stdv,
+
+
                                                     sample=x).mean()
     # recon_error = torch.mean((data_recon - data)**2)/args.data_variance
     # loss = recon_error + vq_loss
@@ -29,7 +33,8 @@ def vq_vae_loss(args, x_prime, x, vq_loss, model):
     return loss, log_pxz, bpd
 
 
-def train_epoch(args, loss_func, pbar, train_loader, model, optimizer, train_bpd, train_recon_error , train_perplexity):
+def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
+                            train_bpd, train_recon_error , train_perplexity):
     """
     Train for one epoch
     """
@@ -80,16 +85,17 @@ def main(args):
     train_loader, valid_loader, test_loader, d_settings = \
                                 data.get_toy_data(args.batch_size)
 
-    args.input_size = d_settings["samples"]
-    args.downsample = args.input_size[-1] // args.enc_height
+    args.input_size = [d_settings["samples"]]
+    args.downsample = args.input_size[-1]
+    # args.downsample = args.input_size[-1] // args.enc_height
     # args.data_variance = data_var
     print(f"Training set size {len(train_loader.dataset)}")
     print(f"Validation set size {len(valid_loader.dataset)}")
     print(f"Test set size {len(test_loader.dataset)}")
 
     print("Loading model")
-    model = VQVAE(args).to(device)
-    print(f'The model has {utils.count_parameters(model):,} trainable parameters')
+    model = VQ(args).to(device)
+    print(f'The model has {utils.count_parameters(model):,} trainable params')
 
     optimizer = optim.Adam(model.parameters(),lr=args.learning_rate,
                                                                 amsgrad=False)
@@ -100,7 +106,7 @@ def main(args):
 
     # Needed for bpd
     # args.KL = args.enc_height * args.enc_height * args.num_codebooks * \
-                                                    # np.log(args.num_embeddings)
+                                                # np.log(args.num_embeddings)
     # args.num_pixels  = np.prod(args.input_size)
 
     ###############################
@@ -162,7 +168,7 @@ if __name__ == '__main__':
             help='Moving av decay for codebook update')
 
     # VQVAE model, defaults like in paper
-    add('--model', type=str, choices=['vqvae', 'diffvqvae'], default='diffvqvae')
+    add('--model', type=str, choices=['vqvae'], default='vqvae')
     add('--enc_height', type=int, default=8,
             help="Encoder output size, used for downsampling and KL")
     add('--num_hiddens', type=int, default=128,

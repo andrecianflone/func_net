@@ -159,7 +159,7 @@ class ResBlock(nn.Module):
 
         return out
 
-class SamllEnc(nn.Module):
+class SmallEnc(nn.Module):
     """ Small conv encoder for toy data """
     def __init__(self, in_channel, channel, stride):
         super().__init__()
