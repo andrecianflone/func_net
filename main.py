@@ -8,6 +8,7 @@ from utils import utils
 from utils.progress import Progress
 import numpy as np
 from model import VQ
+import torch.optim as optim
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -20,8 +21,6 @@ def vq_vae_loss(args, x_prime, x, vq_loss, model):
     """
     # Use Discretized Logistic as an alternative to MSE, see [1]
     log_pxz = utils.discretized_logistic(x_prime, model.dec_log_stdv,
-
-
                                                     sample=x).mean()
     # recon_error = torch.mean((data_recon - data)**2)/args.data_variance
     # loss = recon_error + vq_loss
@@ -32,7 +31,6 @@ def vq_vae_loss(args, x_prime, x, vq_loss, model):
 
     return loss, log_pxz, bpd
 
-
 def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
                             train_bpd, train_recon_error , train_perplexity):
     """
@@ -40,7 +38,7 @@ def train_epoch(args, loss_func, pbar, train_loader, model, optimizer,
     """
     model.train()
     # Loop data in epoch
-    for x, _ in train_loader:
+    for x, y in train_loader:
 
         # This break used for debugging
         if args.max_iterations is not None:

@@ -5,8 +5,6 @@ from torch.nn import functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#TODO: Add encoder/decoder
-
 class Quantize(nn.Module):
     def __init__(self, dim, num_embeddings, decay=0.99, eps=1e-5):
         super().__init__()
@@ -57,6 +55,12 @@ class Quantize(nn.Module):
     def embed_code(self, embed_id):
         return F.embedding(embed_id, self.embed.transpose(0, 1))
 
+class FuncNet():
+    """
+    Contains the function selector network and sequence processing network
+    """
+    pass
+
 class VQ(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -74,7 +78,7 @@ class VQ(nn.Module):
         assert embed_dim % num_codebooks == 0, ("you need that last dimension"
                             " to be evenly divisible by the amt of codebooks")
 
-        self.enc = SmallEnc(in_channel, channel, stride=downsample)
+        self.enc = SmallEnc(in_channel, channel)
 
         self.quantize_conv = nn.Conv2d(channel, embed_dim, 1)
         self.dec = Decoder(embed_dim, in_channel, channel, num_residual_layers,
@@ -161,15 +165,16 @@ class ResBlock(nn.Module):
 
 class SmallEnc(nn.Module):
     """ Small conv encoder for toy data """
-    def __init__(self, in_channel, channel, stride):
+    def __init__(self, in_size, h_size):
         super().__init__()
 
-        self.c1 = nn.Conv2d(in_channel, channel // 2, 2, stride=stride, padding=1)
-        self.c2 = nn.Conv2d(channel // 2, channel, 2, stride=stride, padding=1),
+        self.lin = nn.Sequential(
+            nn.Linear(input_size, h_size, bias=True),
+            nn.ReLU(inplace=True)
+        )
 
     def forward(self, x):
-        r = F.relu(self.c1(x), inplace=True)
-        r = F.relu(self.c2(x), inplace=True)
+        r = self.lin(x)
         return r
 
 class Encoder(nn.Module):
